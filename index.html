@@ -140,6 +140,16 @@
     border-radius:9px; width:36px; height:36px; font-size:1rem; cursor:pointer; }
   .saved .ic:hover{ background:var(--btn-hi); }
   .empty{ color:var(--ink-faint); font-size:.9rem; }
+  .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+  .field label{ font-weight:600; }
+  .field .hint{ margin:0; }
+  .zinp{ width:120px; }
+  #zoneTable{ width:100%; border-collapse:collapse; font-size:.92rem; }
+  #zoneTable th,#zoneTable td{ text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); }
+  #zoneTable th{ color:var(--ink-faint); font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; }
+  #zoneTable td:nth-child(2){ font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600; }
+  #zoneTable td:nth-child(3){ color:var(--ink-dim); }
+  .hint{ font-size:.82rem; color:var(--ink-faint); line-height:1.4; }
   @media (prefers-reduced-motion:reduce){ .clock.warn{animation:none;} .controls button:active{transform:none;} }
 
   /* баннер обновления */
@@ -163,6 +173,7 @@
   <div class="tabs" role="tablist">
     <button id="tabBtnRun"   role="tab" aria-selected="true">Таймер</button>
     <button id="tabBtnBuild" role="tab" aria-selected="false">Конструктор</button>
+    <button id="tabBtnZones" role="tab" aria-selected="false">Зоны</button>
   </div>
 
   <!-- ТАЙМЕР -->
@@ -174,6 +185,7 @@
       </div>
       <div class="setrow">
         <label><input type="checkbox" id="voiceChk" checked> Голос</label>
+        <label><input type="checkbox" id="vibrChk" checked> Вибро</label>
         <span id="pickTotal">—</span>
       </div>
       <div class="track" id="track" aria-hidden="true"></div>
@@ -233,6 +245,30 @@
       </div>
     </div>
   </section>
+
+  <!-- ПУЛЬСОВЫЕ ЗОНЫ -->
+  <section class="view" id="viewZones" hidden>
+    <div class="build">
+      <div>
+        <h2>Ваш пульс</h2>
+        <div class="field">
+          <label for="zRest">Пульс покоя (уд/мин)</label>
+          <input class="inp zinp" id="zRest" type="number" min="30" max="120" inputmode="numeric">
+          <p class="hint">Самый низкий пульс в покое: измерь утром лёжа сразу после пробуждения, или возьми минимальный за ночь из Oura/часов. Обычно 40–65.</p>
+        </div>
+        <div class="field">
+          <label for="zMax">Максимальный пульс (уд/мин)</label>
+          <input class="inp zinp" id="zMax" type="number" min="120" max="230" inputmode="numeric">
+          <p class="hint">Наибольший пульс, которого реально достигал — точнее всего с тяжёлой пробежки или финишного ускорения «до отказа». Если замера нет — грубая прикидка: 220 минус возраст.</p>
+        </div>
+      </div>
+      <div>
+        <h2>Ваши зоны (метод Карвонена)</h2>
+        <table id="zoneTable"></table>
+        <p class="hint">Граница = пульс покоя + процент резерва × (макс − покоя), резерв = макс − покоя. Эти зоны сразу подставляются в цель по пульсу у фаз. Темп индивидуален и по пульсу не считается — он остаётся подсказкой.</p>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -242,14 +278,34 @@
 
   // ---------- типы фаз ----------
   var TYPES={
-    warmup:  {name:'Разминка',   color:'#0e7490', hr:'≤ 142',   pace:'7:10–7:30', cue:'Разминка. Лёгкий бег.'},
-    hard:    {name:'Быстро',     color:'#e0470b', hr:'165–178', pace:'5:10–5:30', cue:'Быстро! Пульс 165 до 178.'},
-    jog:     {name:'Трусца',     color:'#0f9d63', hr:'≤ 135',   pace:'~7:30',     cue:'Трусца. Восстановление.'},
-    tempo:   {name:'Темп',       color:'#b02fb8', hr:'150–162', pace:'6:00–6:15', cue:'Темп. Пульс 150 до 162.'},
-    easy:    {name:'Лёгкий бег', color:'#0e7490', hr:'128–142', pace:'~7:00',     cue:'Лёгкий бег. Пульс в зоне 2.'},
-    cooldown:{name:'Заминка',    color:'#475569', hr:'≤ 130',   pace:'легко',     cue:'Заминка. Совсем легко.'}
+    warmup:  {name:'Разминка',   color:'#0e7490', pace:'7:10–7:30', cue:'Разминка. Лёгкий бег.'},
+    hard:    {name:'Быстро',     color:'#e0470b', pace:'5:10–5:30', cue:'Быстро!'},
+    jog:     {name:'Трусца',     color:'#0f9d63', pace:'~7:30',     cue:'Трусца. Восстановление.'},
+    tempo:   {name:'Темп',       color:'#b02fb8', pace:'6:00–6:15', cue:'Темп.'},
+    easy:    {name:'Лёгкий бег', color:'#0e7490', pace:'~7:00',     cue:'Лёгкий бег.'},
+    cooldown:{name:'Заминка',    color:'#475569', pace:'легко',     cue:'Заминка. Совсем легко.'}
   };
   var TYPE_ORDER=['warmup','hard','jog','tempo','easy','cooldown'];
+
+  // ---------- пульсовые зоны (Карвонен) ----------
+  function loadZones(){ try{ var z=JSON.parse(localStorage.getItem('rt_zones')||'null');
+    if(z && z.rest>0 && z.max>z.rest) return z; }catch(e){} return {rest:45, max:184}; }
+  function saveZones(){ try{ localStorage.setItem('rt_zones',JSON.stringify(ZN)); }catch(e){} }
+  var ZN=loadZones();
+  function computeZ(){ var rest=ZN.rest, max=ZN.max, hrr=max-rest, zb=function(p){return Math.round(rest+p*hrr);};
+    return { z1:[zb(.5),zb(.6)], z2:[zb(.6),zb(.7)], z3:[zb(.7),zb(.8)], z4:[zb(.8),zb(.9)], z5:[zb(.9),max] }; }
+  // цель по пульсу для типа фазы, из ЛИЧНЫХ зон пользователя
+  function hrText(type){ var Z=computeZ(), max=ZN.max;
+    switch(type){
+      case 'warmup':   return '≤ '+Z.z2[1];              // легко, Z1–Z2
+      case 'easy':     return Z.z2[0]+'–'+Z.z2[1];       // Z2
+      case 'jog':      return '≤ '+Z.z2[0];              // восстановление, Z1
+      case 'tempo':    return Z.z3[0]+'–'+Z.z3[1];       // Z3
+      case 'hard':     return Z.z5[0]+'–'+max;           // Z5
+      case 'cooldown': return '≤ '+Z.z2[0];             // Z1
+      default:         return '';
+    }
+  }
 
   // ---------- встроенные забеги ----------
   function fivebythree(){
@@ -290,13 +346,16 @@
       var label=T.name;
       if((p.type==='hard'||p.type==='tempo'||p.type==='jog') && totals[p.type]>1)
         label=T.name+' '+seen[p.type]+'/'+totals[p.type];
-      return {type:p.type,dur:p.dur,label:label,hr:T.hr,pace:T.pace,cue:T.cue};
+      return {type:p.type,dur:p.dur,label:label,hr:hrText(p.type),pace:T.pace,cue:T.cue};
     });
   }
 
   // ---------- состояние раннера ----------
   var PLAN=[], idx=0, remMs=0, phaseEnd=0, running=false, finished=false;
-  var lastWhole=null, tickId=null, voiceOn=true, audioCtx=null, master=null, voices=[], alive=null;
+  var lastWhole=null, tickId=null, voiceOn=true, vibrOn=true, audioCtx=null, master=null, voices=[], alive=null;
+  // вибрация (Android; на iOS navigator.vibrate нет — просто не сработает)
+  var VIBR={ hard:[120,60,120,60,300], jog:[180], tempo:[120,80,220], cooldown:[220], warmup:[150], easy:[150] };
+  function vibrate(pattern){ if(vibrOn && navigator.vibrate){ try{ navigator.vibrate(pattern); }catch(e){} } }
   var noSleep=(typeof NoSleep!=='undefined')?new NoSleep():null;
   var runner=$('runner');
 
@@ -320,13 +379,14 @@
   }
   function at(ms,fn){ setTimeout(fn,ms); }
   function cueFor(type){                              // сигнал начала фазы — свой для каждого типа
+    vibrate(VIBR[type]||[150]);
     if(type==='hard'){ tone(523,0.4,0.7); at(300,function(){tone(659,0.4,0.7);}); at(600,function(){tone(880,0.7,0.75);}); }
     else if(type==='jog'){ tone(659,0.5,0.6); at(360,function(){tone(440,0.85,0.6);}); }
     else if(type==='tempo'){ tone(523,0.45,0.65); at(320,function(){tone(698,0.8,0.68);}); }
     else if(type==='cooldown'){ tone(587,0.5,0.55); at(360,function(){tone(392,0.9,0.55);}); }
     else { tone(494,0.5,0.6); at(340,function(){tone(587,0.8,0.6);}); }   // разминка / лёгкий
   }
-  function finishSound(){ tone(523,0.32,0.7); at(240,function(){tone(659,0.32,0.7);});
+  function finishSound(){ vibrate([250,120,250,120,400]); tone(523,0.32,0.7); at(240,function(){tone(659,0.32,0.7);});
     at(480,function(){tone(784,0.32,0.7);}); at(720,function(){tone(1047,1.0,0.75);}); }
   // тихий фоновый тон — держит аудио-контекст живым, чтобы сигналы играли при кратком затухании экрана
   function startAlive(){ if(!audioCtx||alive) return;
@@ -383,7 +443,7 @@
 
   function tick(){ if(!running) return;
     var rem=(phaseEnd-performance.now())/1000, whole=Math.ceil(rem);
-    if(whole!==lastWhole){ lastWhole=whole; if(whole<=3&&whole>=1) tone(740,0.3,0.55); }
+    if(whole!==lastWhole){ lastWhole=whole; if(whole<=3&&whole>=1){ tone(740,0.3,0.55); vibrate([70]); } }
     if(rem<=0){ advance(false); return; }
     render(rem);
   }
@@ -411,9 +471,11 @@
   });
   $('btnSkip').addEventListener('click',function(){ if(finished)return; ensureAudio(); advance(); });
   $('btnReset').addEventListener('click',function(){ loadWorkout(selId); });
-  $('btnTest').addEventListener('click',function(){ ensureAudio(); voiceOn=$('voiceChk').checked;
-    cueFor('hard'); speak('Быстро! Пульс 165 до 178.'); });
+  $('btnTest').addEventListener('click',function(){ ensureAudio();
+    voiceOn=$('voiceChk').checked; vibrOn=$('vibrChk').checked;
+    cueFor('hard'); speak('Быстро!'); });
   $('voiceChk').addEventListener('change',function(){ voiceOn=this.checked; });
+  $('vibrChk').addEventListener('change',function(){ vibrOn=this.checked; if(vibrOn) vibrate([80]); });
   $('pick').addEventListener('change',function(){ loadWorkout(this.value); });
 
   function refreshPicker(){ var sel=$('pick'); sel.innerHTML='';
@@ -510,15 +572,42 @@
     b.textContent=txt; b.title=title; b.setAttribute('aria-label',title); b.addEventListener('click',fn); return b; }
   function flash(btn,txt){ var old=btn.textContent; btn.textContent=txt; setTimeout(function(){ btn.textContent=old; },1200); }
 
+  // ---------- пульсовые зоны: вкладка ----------
+  function renderZoneTable(){
+    var Z=computeZ(), max=ZN.max;
+    var rows=[
+      ['Z1 восстановление', '≤ '+Z.z2[0], 'Трусца, заминка'],
+      ['Z2 аэробная база',  Z.z2[0]+'–'+Z.z2[1], 'Лёгкий бег, разминка'],
+      ['Z3 темповая',       Z.z3[0]+'–'+Z.z3[1], 'Темп'],
+      ['Z4 порог',          Z.z4[0]+'–'+Z.z4[1], '—'],
+      ['Z5 МПК',            Z.z5[0]+'–'+max,     'Быстро (интервалы)']
+    ];
+    var html='<tr><th>Зона</th><th>Пульс</th><th>Где применяется</th></tr>';
+    rows.forEach(function(r){ html+='<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td></tr>'; });
+    $('zoneTable').innerHTML=html;
+  }
+  function applyZones(){
+    var rest=parseInt($('zRest').value,10), max=parseInt($('zMax').value,10);
+    if(!(rest>0) || !(max>rest)) return;          // не применяем некорректное
+    ZN={rest:rest, max:max}; saveZones(); renderZoneTable();
+    if(!running) loadWorkout(selId);              // обновить цель пульса в фазах
+  }
+  $('zRest').value=ZN.rest; $('zMax').value=ZN.max; renderZoneTable();
+  $('zRest').addEventListener('input',applyZones);
+  $('zMax').addEventListener('input',applyZones);
+
   // ---------- вкладки ----------
+  var VIEWS={ run:'viewRun', build:'viewBuild', zones:'viewZones' };
+  var TABS={ run:'tabBtnRun', build:'tabBtnBuild', zones:'tabBtnZones' };
   function switchTab(which){
-    var run=which==='run';
-    $('viewRun').hidden=!run; $('viewBuild').hidden=run;
-    $('tabBtnRun').setAttribute('aria-selected',run?'true':'false');
-    $('tabBtnBuild').setAttribute('aria-selected',run?'false':'true');
+    Object.keys(VIEWS).forEach(function(k){
+      $(VIEWS[k]).hidden = (k!==which);
+      $(TABS[k]).setAttribute('aria-selected', k===which?'true':'false');
+    });
   }
   $('tabBtnRun').addEventListener('click',function(){ switchTab('run'); });
   $('tabBtnBuild').addEventListener('click',function(){ switchTab('build'); });
+  $('tabBtnZones').addEventListener('click',function(){ switchTab('zones'); });
 
   // ---------- старт ----------
   refreshPicker(); loadWorkout(selId||store[0].id); renderSaved(); newDraft();

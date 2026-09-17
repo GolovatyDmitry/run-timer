@@ -1,6 +1,6 @@
 /* Service worker для таймера — офлайн и запуск как приложение.
    Меняй версию кэша при обновлении ассетов, чтобы клиенты забрали новое. */
-const CACHE = 'run-timer-v3';
+const CACHE = 'run-timer-v4';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'
