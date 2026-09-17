@@ -96,17 +96,18 @@
   .build{ flex:1 1 auto; min-height:0; overflow:auto; box-sizing:border-box;
     padding:14px clamp(14px,4vw,24px) 22px; display:flex; flex-direction:column; gap:14px; }
   .build h2{ font:600 .8rem var(--body); letter-spacing:.09em; text-transform:uppercase;
-    color:var(--ink-faint); margin:4px 0 -4px; }
+    color:var(--ink-faint); margin:0 0 9px; }
   .nameInp{ width:100%; box-sizing:border-box; }
-  .prow{ display:flex; align-items:center; gap:6px; background:var(--slate2);
-    border:1px solid var(--line); border-radius:12px; padding:8px; }
-  .prow .swatch{ width:10px; height:26px; border-radius:4px; flex:0 0 auto; }
-  .prow select{ flex:1; padding:9px 8px; font-size:.95rem; }
-  .prow input{ width:44px; text-align:center; background:var(--panel); color:var(--ink);
+  .prow{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; background:var(--slate2);
+    border:1px solid var(--line); border-radius:12px; padding:9px; }
+  .prow .swatch{ width:8px; align-self:stretch; min-height:36px; border-radius:4px; flex:0 0 auto; }
+  .prow select{ flex:1 1 130px; min-width:0; padding:9px 8px; font-size:.95rem; }
+  .prow .pctrl{ display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .prow input{ width:46px; text-align:center; background:var(--panel); color:var(--ink);
     border:1px solid var(--line); border-radius:8px; padding:9px 4px; font:600 .95rem var(--body); }
   .prow .colon{ color:var(--ink-faint); }
   .prow .ic{ background:var(--btn); border:1px solid var(--line); color:var(--ink);
-    border-radius:8px; width:34px; height:38px; font-size:1rem; cursor:pointer; flex:0 0 auto; }
+    border-radius:8px; width:36px; height:40px; font-size:1rem; cursor:pointer; flex:0 0 auto; }
   .prow .ic:hover{ background:var(--btn-hi); }
   .addrow{ display:flex; gap:8px; flex-wrap:wrap; }
   .addrow button, .actions button{ background:var(--btn); border:1px solid var(--line); color:var(--ink);
@@ -402,11 +403,12 @@
       var cl=document.createElement('span'); cl.className='colon'; cl.textContent=':';
       var si=document.createElement('input'); si.type='number'; si.min=0; si.max=59; si.value=p.dur%60;
       si.addEventListener('input',function(){ var s=Math.min(59,Math.max(0,parseInt(this.value||0,10))); p.dur=Math.floor(p.dur/60)*60+s; updTotal(); });
-      row.appendChild(mi); row.appendChild(cl); row.appendChild(si);
-      var up=ib('↑',function(){ if(i>0){ draft.phases.splice(i-1,0,draft.phases.splice(i,1)[0]); renderEditor(); } });
-      var dn=ib('↓',function(){ if(i<draft.phases.length-1){ draft.phases.splice(i+1,0,draft.phases.splice(i,1)[0]); renderEditor(); } });
-      var rm=ib('✕',function(){ draft.phases.splice(i,1); renderEditor(); updTotal(); });
-      row.appendChild(up); row.appendChild(dn); row.appendChild(rm);
+      var ctrl=document.createElement('div'); ctrl.className='pctrl';
+      ctrl.appendChild(mi); ctrl.appendChild(cl); ctrl.appendChild(si);
+      ctrl.appendChild(ib('↑',function(){ if(i>0){ draft.phases.splice(i-1,0,draft.phases.splice(i,1)[0]); renderEditor(); } }));
+      ctrl.appendChild(ib('↓',function(){ if(i<draft.phases.length-1){ draft.phases.splice(i+1,0,draft.phases.splice(i,1)[0]); renderEditor(); } }));
+      ctrl.appendChild(ib('✕',function(){ draft.phases.splice(i,1); renderEditor(); updTotal(); }));
+      row.appendChild(ctrl);
       box.appendChild(row);
     });
     updTotal();
