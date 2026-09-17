@@ -562,12 +562,19 @@
   function newDraft(){ draft={ id:null, phases:[{type:'warmup',dur:10*60},{type:'cooldown',dur:5*60}] };
     $('wName').value=''; renderEditor(); }
 
-  $('btnAddPhase').addEventListener('click',function(){ draft.phases.push({type:'hard',dur:3*60}); renderEditor(); });
+  // добавляем новые фазы ПЕРЕД финальной заминкой (если она есть), чтобы заминка оставалась последней
+  function insertPhases(arr){
+    var n=draft.phases.length;
+    if(n>0 && draft.phases[n-1].type==='cooldown') Array.prototype.splice.apply(draft.phases,[n-1,0].concat(arr));
+    else Array.prototype.push.apply(draft.phases,arr);
+  }
+  $('btnAddPhase').addEventListener('click',function(){ insertPhases([{type:'hard',dur:3*60}]); renderEditor(); });
   $('btnAddSeries').addEventListener('click',function(){
     var n=Math.max(1,parseInt($('sReps').value||1,10));
     var w=Math.max(0,parseInt($('sWorkM').value||0,10))*60+Math.max(0,parseInt($('sWorkS').value||0,10));
     var r=Math.max(0,parseInt($('sRestM').value||0,10))*60+Math.max(0,parseInt($('sRestS').value||0,10));
-    for(var i=1;i<=n;i++){ draft.phases.push({type:'hard',dur:w}); if(i<n) draft.phases.push({type:'jog',dur:r}); }
+    var add=[]; for(var i=1;i<=n;i++){ add.push({type:'hard',dur:w}); if(i<n) add.push({type:'jog',dur:r}); }
+    insertPhases(add);
     renderEditor();
   });
   function persist(asCopy){
