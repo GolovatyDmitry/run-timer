@@ -112,6 +112,12 @@
   .prow .ic{ background:var(--btn); border:1px solid var(--line); color:var(--ink);
     border-radius:8px; width:36px; height:40px; font-size:1rem; cursor:pointer; flex:0 0 auto; }
   .prow .ic:hover{ background:var(--btn-hi); }
+  .prow .grip{ cursor:grab; touch-action:none; color:var(--ink-faint); font-size:1.15rem;
+    line-height:1; padding:2px 4px; align-self:center; user-select:none; flex:0 0 auto; }
+  .prow .grip:active{ cursor:grabbing; }
+  .prow.sortable-chosen{ background:#243244; }
+  .prow.sortable-ghost{ opacity:.35; }
+  .prow.sortable-drag{ box-shadow:0 10px 26px rgba(0,0,0,.45); }
   .addrow{ display:flex; gap:8px; flex-wrap:wrap; }
   .addrow button, .actions button{ background:var(--btn); border:1px solid var(--line); color:var(--ink);
     border-radius:11px; padding:11px 13px; font:600 .92rem var(--body); cursor:pointer; }
@@ -151,6 +157,7 @@
 </head>
 <body>
 <script src="https://cdn.jsdelivr.net/npm/nosleep.js@0.12.0/dist/NoSleep.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 
 <div class="app">
   <div class="tabs" role="tablist">
@@ -244,18 +251,32 @@
   };
   var TYPE_ORDER=['warmup','hard','jog','tempo','easy','cooldown'];
 
-  // ---------- встроенный забег 5×3 ----------
+  // ---------- встроенные забеги ----------
   function fivebythree(){
     var ph=[{type:'warmup',dur:10*60}];
     for(var i=1;i<=5;i++){ ph.push({type:'hard',dur:3*60}); if(i<5) ph.push({type:'jog',dur:150}); }
     ph.push({type:'cooldown',dur:10*60});
     return {id:'builtin-5x3', name:'Интервалы 5×3', phases:ph};
   }
+  function fourByFour(){
+    var ph=[{type:'warmup',dur:10*60}];
+    for(var i=1;i<=4;i++){ ph.push({type:'hard',dur:4*60}); if(i<4) ph.push({type:'jog',dur:3*60}); }
+    ph.push({type:'cooldown',dur:10*60});
+    return {id:'builtin-4x4', name:'Интервалы 4×4', phases:ph};
+  }
+  function tempoRun(){
+    return {id:'builtin-tempo20', name:'Темповый 20 мин', phases:[
+      {type:'warmup',dur:10*60},{type:'tempo',dur:20*60},{type:'cooldown',dur:10*60}]};
+  }
+  var BUILTINS=[fivebythree, tempoRun, fourByFour];
 
   // ---------- хранилище ----------
   function loadStore(){ try{ var s=JSON.parse(localStorage.getItem('rt_workouts')||'null'); return (s&&s.length)?s:null; }catch(e){ return null; } }
   function saveStore(){ try{ localStorage.setItem('rt_workouts',JSON.stringify(store)); }catch(e){} }
-  var store=loadStore(); if(!store){ store=[fivebythree()]; saveStore(); }
+  var store=loadStore()||[];
+  // добавить недостающие встроенные забеги (в т.ч. новые для уже сохранённых пользователей)
+  BUILTINS.forEach(function(gen){ var w=gen(); if(!store.some(function(x){return x.id===w.id;})) store.push(w); });
+  saveStore();
   var selId; try{ selId=localStorage.getItem('rt_last'); }catch(e){}
   function getW(id){ for(var i=0;i<store.length;i++) if(store[i].id===id) return store[i]; return store[0]; }
   function totalOf(w){ return w.phases.reduce(function(s,p){return s+p.dur;},0); }
@@ -407,9 +428,13 @@
     TYPE_ORDER.forEach(function(k){ var o=document.createElement('option'); o.value=k; o.textContent=TYPES[k].name;
       if(k===val)o.selected=true; s.appendChild(o); }); return s; }
   function renderEditor(){
-    var box=$('phaseEditor'); box.innerHTML='';
+    var box=$('phaseEditor');
+    if(box._sortable){ try{ box._sortable.destroy(); }catch(e){} box._sortable=null; }
+    box.innerHTML='';
     draft.phases.forEach(function(p,i){
       var row=document.createElement('div'); row.className='prow';
+      var grip=document.createElement('span'); grip.className='grip'; grip.textContent='⠿';
+      grip.title='Перетащить'; grip.setAttribute('aria-hidden','true'); row.appendChild(grip);
       var sw=document.createElement('span'); sw.className='swatch'; sw.style.background=TYPES[p.type].color; row.appendChild(sw);
       var ts=typeSelect(p.type); ts.addEventListener('change',function(){ p.type=this.value; sw.style.background=TYPES[this.value].color; });
       row.appendChild(ts);
@@ -426,6 +451,14 @@
       row.appendChild(ctrl);
       box.appendChild(row);
     });
+    if(window.Sortable){
+      box._sortable=Sortable.create(box,{ handle:'.grip', animation:150,
+        onEnd:function(evt){
+          if(evt.oldIndex===evt.newIndex) return;
+          draft.phases.splice(evt.newIndex,0,draft.phases.splice(evt.oldIndex,1)[0]);
+          setTimeout(renderEditor,0);   // перерисовать после того, как Sortable завершит обработку
+        }});
+    }
     updTotal();
   }
   function ib(txt,fn){ var b=document.createElement('button'); b.className='ic'; b.type='button'; b.textContent=txt; b.addEventListener('click',fn); return b; }
