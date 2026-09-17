@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Интервалы 5×3</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&display=swap');
+  :root{
+    --ink:#fff; --ink-dim:rgba(255,255,255,.72); --ink-faint:rgba(255,255,255,.46);
+    --line:rgba(255,255,255,.26); --panel:rgba(0,0,0,.22);
+    --slate:#0f172a; --slate2:#1e293b;
+    --btn:rgba(255,255,255,.15); --btn-hi:rgba(255,255,255,.28);
+    --clock:'Oswald','Arial Narrow',system-ui,sans-serif;
+    --body:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  [hidden]{display:none!important;}
+  img{max-width:100%;}
+  html,body{height:100%;}
+  body{ margin:0; color:var(--ink); font-family:var(--body);
+    background:var(--slate); -webkit-tap-highlight-color:transparent; }
+  .app{ height:100%; box-sizing:border-box; max-width:640px; margin:0 auto;
+    display:flex; flex-direction:column; }
+
+  /* вкладки */
+  .tabs{ display:flex; gap:4px; padding:10px clamp(14px,4vw,24px) 0; flex:0 0 auto; }
+  .tabs button{ flex:1; background:transparent; color:var(--ink-dim); border:0;
+    border-bottom:3px solid transparent; padding:12px 6px; font:600 1rem/1 var(--body);
+    cursor:pointer; letter-spacing:.02em; }
+  .tabs button[aria-selected="true"]{ color:var(--ink); border-color:var(--ink); }
+  .view{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+
+  /* ---------- ВКЛАДКА ТАЙМЕР ---------- */
+  .runner{ flex:1 1 auto; min-height:0; box-sizing:border-box;
+    padding:12px clamp(14px,4vw,24px) 14px; display:flex; flex-direction:column; gap:11px;
+    background:radial-gradient(120% 90% at 50% 0%, var(--slate2), var(--slate) 62%);
+    transition:background .5s ease; }
+  .runner[data-phase="warmup"],.runner[data-phase="easy"]{ --bg:#0e7490; --bg2:#155e75; }
+  .runner[data-phase="hard"]  { --bg:#e0470b; --bg2:#b8360a; }
+  .runner[data-phase="jog"]   { --bg:#0f9d63; --bg2:#0a7d4f; }
+  .runner[data-phase="tempo"] { --bg:#b02fb8; --bg2:#8b249a; }
+  .runner[data-phase="cooldown"]{ --bg:#475569; --bg2:#334155; }
+  .runner[data-phase="done"]  { --bg:#6d3ce0; --bg2:#5327b0; }
+  .runner[data-phase]{ background:radial-gradient(120% 90% at 50% 0%, var(--bg2), var(--bg) 64%); }
+
+  .pickrow{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+  select,.inp{ background:var(--panel); color:var(--ink); border:1px solid var(--line);
+    border-radius:12px; padding:11px 12px; font:600 1rem var(--body); }
+  select{ flex:1; min-width:0; }
+  select option{ color:#111; }
+  .mini{ font-size:.82rem; color:var(--ink-dim); background:var(--btn); border:1px solid var(--line);
+    border-radius:10px; padding:9px 11px; cursor:pointer; }
+  .setrow{ display:flex; align-items:center; gap:14px; flex:0 0 auto; font-size:.9rem; color:var(--ink-dim); }
+  .setrow label{ display:flex; align-items:center; gap:7px; cursor:pointer; }
+  .setrow input[type=checkbox]{ width:18px; height:18px; accent-color:#fff; }
+
+  .track{ display:flex; gap:3px; height:9px; flex:0 0 auto; }
+  .seg{ position:relative; border-radius:4px; background:rgba(255,255,255,.24); overflow:hidden; }
+  .seg.hardSeg{ background:rgba(255,255,255,.34); }
+  .seg.done{ background:rgba(255,255,255,.85); }
+  .seg .fill{ position:absolute; inset:0 auto 0 0; width:0; background:rgba(255,255,255,.85); }
+
+  .topline{ display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+    font-size:.8rem; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-dim); flex:0 0 auto; }
+  .topline b{ color:var(--ink); font-weight:600; }
+  .stage{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:6px; }
+  .phase{ font-family:var(--clock); font-weight:600; text-transform:uppercase; letter-spacing:.02em;
+    font-size:clamp(1.4rem,6vw,2.3rem); line-height:1.05; max-width:100%;
+    overflow-wrap:anywhere; text-wrap:balance; padding:0 4px; }
+  .clock{ font-family:var(--clock); font-weight:700; font-variant-numeric:tabular-nums;
+    font-size:clamp(4.6rem,27vw,10.5rem); line-height:.92; margin:2px 0; }
+  .clock.warn{ animation:pulse 1s ease-in-out infinite; }
+  @keyframes pulse{ 50%{opacity:.5;} }
+  .targets{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .chip{ background:var(--panel); border:1px solid var(--line); border-radius:999px;
+    padding:7px 15px; font-size:clamp(.9rem,3.8vw,1.1rem); font-weight:600; }
+  .chip small{ display:block; font-weight:400; font-size:.6em; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--ink-faint); }
+  .next{ font-size:.88rem; color:var(--ink-dim); min-height:1.1em; text-align:center; flex:0 0 auto; }
+  .controls{ display:flex; gap:9px; flex:0 0 auto; }
+  .controls button{ flex:1; font:700 1.05rem var(--body); color:var(--ink); border:1px solid var(--line);
+    background:var(--btn); border-radius:15px; padding:15px 8px; cursor:pointer; transition:background .15s,transform .05s; }
+  .controls button:hover{ background:var(--btn-hi); }
+  .controls button:active{ transform:scale(.97); }
+  .controls .primary{ flex:2; background:rgba(255,255,255,.92); color:#111; border-color:transparent; }
+  .controls .ghost{ font-size:.95rem; }
+  button:focus-visible,select:focus-visible,input:focus-visible{ outline:3px solid #fff; outline-offset:2px; }
+
+  /* ---------- ВКЛАДКА КОНСТРУКТОР ---------- */
+  .build{ flex:1 1 auto; min-height:0; overflow:auto; box-sizing:border-box;
+    padding:14px clamp(14px,4vw,24px) 22px; display:flex; flex-direction:column; gap:14px; }
+  .build h2{ font:600 .8rem var(--body); letter-spacing:.09em; text-transform:uppercase;
+    color:var(--ink-faint); margin:4px 0 -4px; }
+  .nameInp{ width:100%; box-sizing:border-box; }
+  .prow{ display:flex; align-items:center; gap:6px; background:var(--slate2);
+    border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .prow .swatch{ width:10px; height:26px; border-radius:4px; flex:0 0 auto; }
+  .prow select{ flex:1; padding:9px 8px; font-size:.95rem; }
+  .prow input{ width:44px; text-align:center; background:var(--panel); color:var(--ink);
+    border:1px solid var(--line); border-radius:8px; padding:9px 4px; font:600 .95rem var(--body); }
+  .prow .colon{ color:var(--ink-faint); }
+  .prow .ic{ background:var(--btn); border:1px solid var(--line); color:var(--ink);
+    border-radius:8px; width:34px; height:38px; font-size:1rem; cursor:pointer; flex:0 0 auto; }
+  .prow .ic:hover{ background:var(--btn-hi); }
+  .addrow{ display:flex; gap:8px; flex-wrap:wrap; }
+  .addrow button, .actions button{ background:var(--btn); border:1px solid var(--line); color:var(--ink);
+    border-radius:11px; padding:11px 13px; font:600 .92rem var(--body); cursor:pointer; }
+  .addrow button:hover,.actions button:hover{ background:var(--btn-hi); }
+  .series{ background:var(--slate2); border:1px solid var(--line); border-radius:12px; padding:12px;
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:.9rem; color:var(--ink-dim); }
+  .series input{ width:40px; text-align:center; background:var(--panel); color:var(--ink);
+    border:1px solid var(--line); border-radius:8px; padding:8px 4px; font:600 .92rem var(--body); }
+  .totalline{ font-size:.95rem; color:var(--ink-dim); }
+  .totalline b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .actions .primary{ background:rgba(255,255,255,.92); color:#111; border-color:transparent; font-weight:700; }
+  .saved{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:7px; }
+  .saved li{ display:flex; align-items:center; gap:8px; background:var(--slate2);
+    border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+  .saved .nm{ font-weight:600; }
+  .saved .du{ color:var(--ink-dim); font-size:.85rem; font-variant-numeric:tabular-nums; }
+  .saved .sp{ margin-left:auto; display:flex; gap:6px; }
+  .saved .ic{ background:var(--btn); border:1px solid var(--line); color:var(--ink);
+    border-radius:9px; width:36px; height:36px; font-size:1rem; cursor:pointer; }
+  .saved .ic:hover{ background:var(--btn-hi); }
+  .empty{ color:var(--ink-faint); font-size:.9rem; }
+  @media (prefers-reduced-motion:reduce){ .clock.warn{animation:none;} .controls button:active{transform:none;} }
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/nosleep.js@0.12.0/dist/NoSleep.min.js"></script>
+
+<div class="app">
+  <div class="tabs" role="tablist">
+    <button id="tabBtnRun"   role="tab" aria-selected="true">Таймер</button>
+    <button id="tabBtnBuild" role="tab" aria-selected="false">Конструктор</button>
+  </div>
+
+  <!-- ТАЙМЕР -->
+  <section class="view" id="viewRun">
+    <div class="runner" id="runner" data-phase="warmup">
+      <div class="pickrow">
+        <select id="pick" aria-label="Выбрать забег"></select>
+        <span class="mini" id="btnTest">🔊 Звук</span>
+      </div>
+      <div class="setrow">
+        <label><input type="checkbox" id="voiceChk" checked> Голос</label>
+        <span id="pickTotal">—</span>
+      </div>
+      <div class="track" id="track" aria-hidden="true"></div>
+      <div class="topline">
+        <span id="phaseIdx">Фаза 1</span>
+        <span>Осталось всего <b id="totalLeft">0:00</b></span>
+      </div>
+      <div class="stage">
+        <div class="phase" id="phase">—</div>
+        <div class="clock" id="clock">0:00</div>
+        <div class="targets">
+          <span class="chip"><small>Пульс</small><span id="hr">—</span></span>
+          <span class="chip"><small>Темп /км</small><span id="pace">—</span></span>
+        </div>
+      </div>
+      <div class="next" id="next"></div>
+      <div class="controls">
+        <button class="primary" id="btnPlay">▶ Старт</button>
+        <button class="ghost" id="btnSkip">Пропустить →</button>
+        <button class="ghost" id="btnReset">Сброс</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- КОНСТРУКТОР -->
+  <section class="view" id="viewBuild" hidden>
+    <div class="build">
+      <div>
+        <h2>Название забега</h2>
+        <input class="inp nameInp" id="wName" placeholder="Напр. Лёгкий 30 мин" autocomplete="off">
+      </div>
+      <div>
+        <h2>Фазы</h2>
+        <div id="phaseEditor" style="display:flex;flex-direction:column;gap:7px;"></div>
+      </div>
+      <div class="addrow">
+        <button id="btnAddPhase">＋ Фаза</button>
+      </div>
+      <div>
+        <h2>Быстро добавить серию интервалов</h2>
+        <div class="series">
+          <input id="sReps" type="number" min="1" max="30" value="5"> ×
+          (быстро <input id="sWorkM" type="number" min="0" value="3">:<input id="sWorkS" type="number" min="0" max="59" value="0">
+          / трусца <input id="sRestM" type="number" min="0" value="2">:<input id="sRestS" type="number" min="0" max="59" value="30">)
+          <button id="btnAddSeries" class="ic" style="width:auto;padding:8px 12px;">Добавить</button>
+        </div>
+      </div>
+      <div class="totalline">Итого: <b id="buildTotal">0:00</b></div>
+      <div class="actions">
+        <button class="primary" id="btnSave">Сохранить</button>
+        <button id="btnSaveCopy">Сохранить как копию</button>
+        <button id="btnNewW">Новый</button>
+      </div>
+      <div>
+        <h2>Сохранённые забеги</h2>
+        <ul class="saved" id="savedList"></ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+
+  // ---------- типы фаз ----------
+  var TYPES={
+    warmup:  {name:'Разминка',   color:'#0e7490', hr:'≤ 142',   pace:'7:10–7:30', cue:'Разминка. Лёгкий бег.'},
+    hard:    {name:'Быстро',     color:'#e0470b', hr:'165–178', pace:'5:10–5:30', cue:'Быстро! Пульс 165 до 178.'},
+    jog:     {name:'Трусца',     color:'#0f9d63', hr:'≤ 135',   pace:'~7:30',     cue:'Трусца. Восстановление.'},
+    tempo:   {name:'Темп',       color:'#b02fb8', hr:'150–162', pace:'6:00–6:15', cue:'Темп. Пульс 150 до 162.'},
+    easy:    {name:'Лёгкий бег', color:'#0e7490', hr:'128–142', pace:'~7:00',     cue:'Лёгкий бег. Пульс в зоне 2.'},
+    cooldown:{name:'Заминка',    color:'#475569', hr:'≤ 130',   pace:'легко',     cue:'Заминка. Совсем легко.'}
+  };
+  var TYPE_ORDER=['warmup','hard','jog','tempo','easy','cooldown'];
+
+  // ---------- встроенный забег 5×3 ----------
+  function fivebythree(){
+    var ph=[{type:'warmup',dur:10*60}];
+    for(var i=1;i<=5;i++){ ph.push({type:'hard',dur:3*60}); if(i<5) ph.push({type:'jog',dur:150}); }
+    ph.push({type:'cooldown',dur:10*60});
+    return {id:'builtin-5x3', name:'Интервалы 5×3', phases:ph};
+  }
+
+  // ---------- хранилище ----------
+  function loadStore(){ try{ var s=JSON.parse(localStorage.getItem('rt_workouts')||'null'); return (s&&s.length)?s:null; }catch(e){ return null; } }
+  function saveStore(){ try{ localStorage.setItem('rt_workouts',JSON.stringify(store)); }catch(e){} }
+  var store=loadStore(); if(!store){ store=[fivebythree()]; saveStore(); }
+  var selId; try{ selId=localStorage.getItem('rt_last'); }catch(e){}
+  function getW(id){ for(var i=0;i<store.length;i++) if(store[i].id===id) return store[i]; return store[0]; }
+  function totalOf(w){ return w.phases.reduce(function(s,p){return s+p.dur;},0); }
+
+  // ---------- нормализация в план для раннера ----------
+  function normalize(w){
+    var totals={}; w.phases.forEach(function(p){ totals[p.type]=(totals[p.type]||0)+1; });
+    var seen={};
+    return w.phases.map(function(p){
+      var T=TYPES[p.type]; seen[p.type]=(seen[p.type]||0)+1;
+      var label=T.name;
+      if((p.type==='hard'||p.type==='tempo'||p.type==='jog') && totals[p.type]>1)
+        label=T.name+' '+seen[p.type]+'/'+totals[p.type];
+      return {type:p.type,dur:p.dur,label:label,hr:T.hr,pace:T.pace,cue:T.cue};
+    });
+  }
+
+  // ---------- состояние раннера ----------
+  var PLAN=[], idx=0, remMs=0, phaseEnd=0, running=false, finished=false;
+  var lastWhole=null, tickId=null, voiceOn=true, audioCtx=null, master=null, voices=[], alive=null;
+  var noSleep=(typeof NoSleep!=='undefined')?new NoSleep():null;
+  var runner=$('runner');
+
+  // ---------- мягкий звук ----------
+  function ensureAudio(){
+    if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      master=audioCtx.createGain(); master.gain.value=0.9; master.connect(audioCtx.destination); }catch(e){} }
+    if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+  }
+  // мягкий тембр (треугольник), но громко и длинно
+  function tone(freq,dur,vol){
+    if(!audioCtx) return;
+    try{ var t=audioCtx.currentTime, o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.type='triangle'; o.frequency.value=freq;
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(vol||0.6, t+0.03);   // быстрая мягкая атака
+      g.gain.setValueAtTime(vol||0.6, t+dur*0.55);             // держим — сигнал слышно
+      g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.05);
+    }catch(e){}
+  }
+  function at(ms,fn){ setTimeout(fn,ms); }
+  function cueFor(type){                              // сигнал начала фазы — свой для каждого типа
+    if(type==='hard'){ tone(523,0.4,0.7); at(300,function(){tone(659,0.4,0.7);}); at(600,function(){tone(880,0.7,0.75);}); }
+    else if(type==='jog'){ tone(659,0.5,0.6); at(360,function(){tone(440,0.85,0.6);}); }
+    else if(type==='tempo'){ tone(523,0.45,0.65); at(320,function(){tone(698,0.8,0.68);}); }
+    else if(type==='cooldown'){ tone(587,0.5,0.55); at(360,function(){tone(392,0.9,0.55);}); }
+    else { tone(494,0.5,0.6); at(340,function(){tone(587,0.8,0.6);}); }   // разминка / лёгкий
+  }
+  function finishSound(){ tone(523,0.32,0.7); at(240,function(){tone(659,0.32,0.7);});
+    at(480,function(){tone(784,0.32,0.7);}); at(720,function(){tone(1047,1.0,0.75);}); }
+  // тихий фоновый тон — держит аудио-контекст живым, чтобы сигналы играли при кратком затухании экрана
+  function startAlive(){ if(!audioCtx||alive) return;
+    try{ var o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type='sine'; o.frequency.value=30;
+      g.gain.value=0.0009; o.connect(g); g.connect(audioCtx.destination); o.start(); alive={o:o}; }catch(e){} }
+  function stopAlive(){ if(alive){ try{ alive.o.stop(); }catch(e){} alive=null; } }
+
+  function loadVoices(){ try{ voices=window.speechSynthesis.getVoices()||[]; }catch(e){} }
+  function pickVoice(){ return voices.filter(function(v){return /ru([-_]|$)/i.test(v.lang);})[0]
+      || voices.filter(function(v){return /russ|русск/i.test(v.name);})[0] || null; }
+  function speak(text){ if(!voiceOn||!('speechSynthesis' in window))return;
+    try{ speechSynthesis.cancel(); var u=new SpeechSynthesisUtterance(text);
+      u.lang='ru-RU'; u.rate=0.98; u.volume=1; var v=pickVoice(); if(v)u.voice=v;
+      speechSynthesis.speak(u); }catch(e){} }
+  if('speechSynthesis' in window){ loadVoices(); try{ speechSynthesis.onvoiceschanged=loadVoices; }catch(e){} }
+
+  // ---------- не гасить экран ----------
+  function keepAwake(){ try{ if(noSleep) noSleep.enable(); }catch(e){} }
+  function allowSleep(){ try{ if(noSleep) noSleep.disable(); }catch(e){} }
+  document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible'&&running) keepAwake(); });
+
+  // ---------- отрисовка раннера ----------
+  function fmt(sec){ sec=Math.max(0,Math.ceil(sec)); var m=Math.floor(sec/60),s=sec%60; return m+':'+(s<10?'0':'')+s; }
+  function buildTrack(){ var t=$('track'); t.innerHTML='';
+    PLAN.forEach(function(p){ var s=document.createElement('div'); s.className='seg'+(p.type==='hard'?' hardSeg':'');
+      s.style.flexGrow=p.dur; var f=document.createElement('div'); f.className='fill'; s.appendChild(f); t.appendChild(s); }); }
+  function paintTrack(rem){ var segs=$('track').children;
+    for(var i=0;i<segs.length;i++){ var f=segs[i].firstChild;
+      if(i<idx){ segs[i].classList.add('done'); f.style.width='0'; }
+      else{ segs[i].classList.remove('done');
+        f.style.width=(i===idx&&!finished)?(100*(1-rem/PLAN[i].dur))+'%':'0'; } } }
+  function render(rem){ var p=PLAN[idx];
+    runner.setAttribute('data-phase', finished?'done':p.type);
+    $('phase').textContent = finished?'Готово!':p.label;
+    $('clock').textContent = finished?'✓':fmt(rem);
+    $('hr').textContent    = finished?'—':p.hr;
+    $('pace').textContent  = finished?'—':p.pace;
+    $('phaseIdx').textContent = finished?'Завершено':('Фаза '+(idx+1)+' из '+PLAN.length);
+    var after=0; for(var i=idx+1;i<PLAN.length;i++) after+=PLAN[i].dur;
+    $('totalLeft').textContent = finished?'0:00':fmt(rem+after);
+    var nx=PLAN[idx+1];
+    $('next').textContent = finished?'Отличная работа 💪 Выпей воды.':(nx?('Дальше: '+nx.label):'Дальше: финиш');
+    $('clock').classList.toggle('warn', running&&!finished&&rem<=3&&rem>0);
+    paintTrack(rem);
+  }
+  function loadWorkout(id){
+    var w=getW(id); selId=w.id; try{ localStorage.setItem('rt_last',selId); }catch(e){}
+    PLAN=normalize(w); idx=0; finished=false; running=false; stopLoop(); allowSleep();
+    remMs=PLAN[0].dur*1000; lastWhole=null;
+    $('btnPlay').textContent='▶ Старт';
+    $('pick').value=selId; $('pickTotal').textContent='Всего '+fmt(totalOf(w));
+    buildTrack(); render(remMs/1000);
+  }
+
+  function tick(){ if(!running) return;
+    var rem=(phaseEnd-performance.now())/1000, whole=Math.ceil(rem);
+    if(whole!==lastWhole){ lastWhole=whole; if(whole<=3&&whole>=1) tone(740,0.3,0.55); }
+    if(rem<=0){ advance(false); return; }
+    render(rem);
+  }
+  function advance(){ if(finished) return;
+    if(idx>=PLAN.length-1){ finished=true; running=false; stopLoop(); finishSound();
+      speak('Тренировка окончена. Молодец!'); $('btnPlay').textContent='▶ Старт'; render(0); allowSleep(); stopAlive(); return; }
+    idx++; remMs=PLAN[idx].dur*1000; lastWhole=null; phaseEnd=performance.now()+remMs;
+    cueFor(PLAN[idx].type); speak(PLAN[idx].cue); render(remMs/1000);
+  }
+  function startLoop(){ if(!tickId) tickId=setInterval(tick,100); }
+  function stopLoop(){ if(tickId){ clearInterval(tickId); tickId=null; } }
+
+  function play(){ if(finished){ loadWorkout(selId); return; }
+    ensureAudio(); startAlive(); running=true; phaseEnd=performance.now()+remMs;
+    $('btnPlay').textContent='⏸ Пауза'; keepAwake(); startLoop(); }
+  function pause(){ running=false; remMs=Math.max(0,phaseEnd-performance.now());
+    $('btnPlay').textContent='▶ Продолжить'; stopLoop(); allowSleep(); stopAlive(); $('clock').classList.remove('warn'); }
+
+  // кнопки раннера
+  $('btnPlay').addEventListener('click',function(){
+    if(running){ pause(); return; }
+    var starting=(idx===0 && Math.abs(remMs-PLAN[0].dur*1000)<50 && !finished);
+    play();
+    if(starting){ cueFor(PLAN[0].type); speak(PLAN[0].cue); }   // озвучить старт (в жесте — разблокирует речь)
+  });
+  $('btnSkip').addEventListener('click',function(){ if(finished)return; ensureAudio(); advance(); });
+  $('btnReset').addEventListener('click',function(){ loadWorkout(selId); });
+  $('btnTest').addEventListener('click',function(){ ensureAudio(); voiceOn=$('voiceChk').checked;
+    cueFor('hard'); speak('Быстро! Пульс 165 до 178.'); });
+  $('voiceChk').addEventListener('change',function(){ voiceOn=this.checked; });
+  $('pick').addEventListener('change',function(){ loadWorkout(this.value); });
+
+  function refreshPicker(){ var sel=$('pick'); sel.innerHTML='';
+    store.forEach(function(w){ var o=document.createElement('option'); o.value=w.id;
+      o.textContent=w.name+' • '+fmt(totalOf(w)); sel.appendChild(o); });
+    if(!getW(selId)) selId=store[0].id; sel.value=selId;
+  }
+
+  // ---------- КОНСТРУКТОР ----------
+  var draft={ id:null, phases:[] };
+  function typeSelect(val){ var s=document.createElement('select');
+    TYPE_ORDER.forEach(function(k){ var o=document.createElement('option'); o.value=k; o.textContent=TYPES[k].name;
+      if(k===val)o.selected=true; s.appendChild(o); }); return s; }
+  function renderEditor(){
+    var box=$('phaseEditor'); box.innerHTML='';
+    draft.phases.forEach(function(p,i){
+      var row=document.createElement('div'); row.className='prow';
+      var sw=document.createElement('span'); sw.className='swatch'; sw.style.background=TYPES[p.type].color; row.appendChild(sw);
+      var ts=typeSelect(p.type); ts.addEventListener('change',function(){ p.type=this.value; sw.style.background=TYPES[this.value].color; });
+      row.appendChild(ts);
+      var mi=document.createElement('input'); mi.type='number'; mi.min=0; mi.value=Math.floor(p.dur/60);
+      mi.addEventListener('input',function(){ p.dur=(parseInt(this.value||0,10))*60+(p.dur%60); updTotal(); });
+      var cl=document.createElement('span'); cl.className='colon'; cl.textContent=':';
+      var si=document.createElement('input'); si.type='number'; si.min=0; si.max=59; si.value=p.dur%60;
+      si.addEventListener('input',function(){ var s=Math.min(59,Math.max(0,parseInt(this.value||0,10))); p.dur=Math.floor(p.dur/60)*60+s; updTotal(); });
+      row.appendChild(mi); row.appendChild(cl); row.appendChild(si);
+      var up=ib('↑',function(){ if(i>0){ draft.phases.splice(i-1,0,draft.phases.splice(i,1)[0]); renderEditor(); } });
+      var dn=ib('↓',function(){ if(i<draft.phases.length-1){ draft.phases.splice(i+1,0,draft.phases.splice(i,1)[0]); renderEditor(); } });
+      var rm=ib('✕',function(){ draft.phases.splice(i,1); renderEditor(); updTotal(); });
+      row.appendChild(up); row.appendChild(dn); row.appendChild(rm);
+      box.appendChild(row);
+    });
+    updTotal();
+  }
+  function ib(txt,fn){ var b=document.createElement('button'); b.className='ic'; b.type='button'; b.textContent=txt; b.addEventListener('click',fn); return b; }
+  function draftTotal(){ return draft.phases.reduce(function(s,p){return s+p.dur;},0); }
+  function updTotal(){ $('buildTotal').textContent=fmt(draftTotal()); }
+
+  function loadDraft(w){ draft={ id:w?w.id:null, phases:(w?w.phases:[]).map(function(p){return {type:p.type,dur:p.dur};}) };
+    $('wName').value=w?w.name:''; renderEditor(); }
+  function newDraft(){ draft={ id:null, phases:[{type:'warmup',dur:10*60},{type:'cooldown',dur:5*60}] };
+    $('wName').value=''; renderEditor(); }
+
+  $('btnAddPhase').addEventListener('click',function(){ draft.phases.push({type:'hard',dur:3*60}); renderEditor(); });
+  $('btnAddSeries').addEventListener('click',function(){
+    var n=Math.max(1,parseInt($('sReps').value||1,10));
+    var w=Math.max(0,parseInt($('sWorkM').value||0,10))*60+Math.max(0,parseInt($('sWorkS').value||0,10));
+    var r=Math.max(0,parseInt($('sRestM').value||0,10))*60+Math.max(0,parseInt($('sRestS').value||0,10));
+    for(var i=1;i<=n;i++){ draft.phases.push({type:'hard',dur:w}); if(i<n) draft.phases.push({type:'jog',dur:r}); }
+    renderEditor();
+  });
+  function persist(asCopy){
+    var name=($('wName').value||'').trim(); if(!name){ $('wName').focus(); return; }
+    if(!draft.phases.length){ return; }
+    var phases=draft.phases.map(function(p){return {type:p.type,dur:p.dur};});
+    if(!asCopy && draft.id){ var w=getW(draft.id); if(w){ w.name=name; w.phases=phases; } }
+    else{ var id='w'+Date.now(); store.push({id:id,name:name,phases:phases}); draft.id=id; }
+    saveStore(); refreshPicker(); renderSaved();
+    if(getW(selId)) loadWorkout(selId); else loadWorkout(draft.id);
+    flash($('btnSave'),'Сохранено ✓');
+  }
+  $('btnSave').addEventListener('click',function(){ persist(false); });
+  $('btnSaveCopy').addEventListener('click',function(){ persist(true); });
+  $('btnNewW').addEventListener('click',newDraft);
+
+  function renderSaved(){ var ul=$('savedList'); ul.innerHTML='';
+    if(!store.length){ ul.innerHTML='<li class="empty">Пока нет сохранённых забегов.</li>'; return; }
+    store.forEach(function(w){ var li=document.createElement('li');
+      var nm=document.createElement('span'); nm.className='nm'; nm.textContent=w.name;
+      var du=document.createElement('span'); du.className='du'; du.textContent=fmt(totalOf(w));
+      var sp=document.createElement('span'); sp.className='sp';
+      sp.appendChild(ib2('▶','В таймер',function(){ loadWorkout(w.id); switchTab('run'); }));
+      sp.appendChild(ib2('✎','Изменить',function(){ loadDraft(w); switchTab('build'); }));
+      sp.appendChild(ib2('🗑','Удалить',function(){ if(store.length<=1) return;
+        store=store.filter(function(x){return x.id!==w.id;}); saveStore(); refreshPicker(); renderSaved();
+        if(selId===w.id) loadWorkout(store[0].id); }));
+      li.appendChild(nm); li.appendChild(du); li.appendChild(sp); ul.appendChild(li);
+    });
+  }
+  function ib2(txt,title,fn){ var b=document.createElement('button'); b.className='ic'; b.type='button';
+    b.textContent=txt; b.title=title; b.setAttribute('aria-label',title); b.addEventListener('click',fn); return b; }
+  function flash(btn,txt){ var old=btn.textContent; btn.textContent=txt; setTimeout(function(){ btn.textContent=old; },1200); }
+
+  // ---------- вкладки ----------
+  function switchTab(which){
+    var run=which==='run';
+    $('viewRun').hidden=!run; $('viewBuild').hidden=run;
+    $('tabBtnRun').setAttribute('aria-selected',run?'true':'false');
+    $('tabBtnBuild').setAttribute('aria-selected',run?'false':'true');
+  }
+  $('tabBtnRun').addEventListener('click',function(){ switchTab('run'); });
+  $('tabBtnBuild').addEventListener('click',function(){ switchTab('build'); });
+
+  // ---------- старт ----------
+  refreshPicker(); loadWorkout(selId||store[0].id); renderSaved(); newDraft();
+})();
+</script>
+</body>
+</html>
