@@ -144,11 +144,13 @@
   .field label{ font-weight:600; }
   .field .hint{ margin:0; }
   .zinp{ width:120px; }
-  #zoneTable{ width:100%; border-collapse:collapse; font-size:.92rem; }
-  #zoneTable th,#zoneTable td{ text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); }
-  #zoneTable th{ color:var(--ink-faint); font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; }
-  #zoneTable td:nth-child(2){ font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600; }
+  #zoneTable,#paceTable{ width:100%; border-collapse:collapse; font-size:.92rem; }
+  #zoneTable th,#zoneTable td,#paceTable th,#paceTable td{ text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); }
+  #zoneTable th,#paceTable th{ color:var(--ink-faint); font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; }
+  #zoneTable td:nth-child(2),#paceTable td:nth-child(2){ font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600; }
   #zoneTable td:nth-child(3){ color:var(--ink-dim); }
+  .timerow{ display:flex; align-items:center; gap:8px; }
+  #ptMin,#ptSec{ width:84px; }
   .hint{ font-size:.82rem; color:var(--ink-faint); line-height:1.4; }
   @media (prefers-reduced-motion:reduce){ .clock.warn{animation:none;} .controls button:active{transform:none;} }
 
@@ -265,7 +267,21 @@
       <div>
         <h2>Ваши зоны (метод Карвонена)</h2>
         <table id="zoneTable"></table>
-        <p class="hint">Граница = пульс покоя + процент резерва × (макс − покоя), резерв = макс − покоя. Эти зоны сразу подставляются в цель по пульсу у фаз. Темп индивидуален и по пульсу не считается — он остаётся подсказкой.</p>
+        <p class="hint">Граница = пульс покоя + процент резерва × (макс − покоя), резерв = макс − покоя. Эти зоны сразу подставляются в цель по пульсу у фаз.</p>
+      </div>
+      <div>
+        <h2>Темп из результата теста</h2>
+        <div class="field">
+          <label for="ptDist">Дистанция теста (км)</label>
+          <input class="inp zinp" id="ptDist" type="number" min="0.4" step="0.1" inputmode="decimal" placeholder="напр. 5">
+        </div>
+        <div class="field">
+          <label>Время</label>
+          <span class="timerow"><input class="inp" id="ptMin" type="number" min="0" inputmode="numeric" placeholder="мин"> :
+            <input class="inp" id="ptSec" type="number" min="0" max="59" inputmode="numeric" placeholder="сек"></span>
+        </div>
+        <table id="paceTable"></table>
+        <p class="hint">Введи недавний максимальный результат — лучшее время на дистанции или тест «до отказа» (напр. 5 км). Темп фаз считается по формуле Риджела/Дэниелса от этого результата. Это оценка; без теста темп — подсказка по умолчанию.</p>
       </div>
     </div>
   </section>
@@ -307,6 +323,20 @@
     }
   }
 
+  // ---------- темп из результата теста (Риджел + сдвиги Дэниелса) ----------
+  function loadPaceTest(){ try{ var p=JSON.parse(localStorage.getItem('rt_pacetest')||'null');
+    if(p && p.dist>0 && p.secs>0) return p; }catch(e){} return null; }
+  function savePaceTest(){ try{ if(PT) localStorage.setItem('rt_pacetest',JSON.stringify(PT));
+    else localStorage.removeItem('rt_pacetest'); }catch(e){} }
+  var PT=loadPaceTest();
+  var POFF={ I:-8, T:24, E:78, R:100 };   // сдвиг сек/км относительно темпа на 5 км
+  function p5kPace(){ if(!PT) return null; var t5=PT.secs*Math.pow(5/PT.dist,1.06); return t5/5; } // сек/км
+  function paceFor(kind){ var b=p5kPace(); if(b==null) return null; return Math.round(b+POFF[kind]); }
+  function fmtPace(sec){ if(sec==null) return null; var m=Math.floor(sec/60), s=Math.round(sec-m*60);
+    if(s===60){ m++; s=0; } return m+':'+(s<10?'0':'')+s; }
+  function paceKind(type){ return {warmup:'E',easy:'E',jog:'R',tempo:'T',hard:'I',cooldown:'R'}[type]; }
+  function paceText(type){ var s=paceFor(paceKind(type)); return (s==null)?TYPES[type].pace:fmtPace(s); }
+
   // ---------- встроенные забеги ----------
   function fivebythree(){
     var ph=[{type:'warmup',dur:10*60}];
@@ -346,7 +376,7 @@
       var label=T.name;
       if((p.type==='hard'||p.type==='tempo'||p.type==='jog') && totals[p.type]>1)
         label=T.name+' '+seen[p.type]+'/'+totals[p.type];
-      return {type:p.type,dur:p.dur,label:label,hr:hrText(p.type),pace:T.pace,cue:T.cue};
+      return {type:p.type,dur:p.dur,label:label,hr:hrText(p.type),pace:paceText(p.type),cue:T.cue};
     });
   }
 
@@ -592,9 +622,25 @@
     ZN={rest:rest, max:max}; saveZones(); renderZoneTable();
     if(!running) loadWorkout(selId);              // обновить цель пульса в фазах
   }
+  function renderPaceTable(){
+    if(!PT){ $('paceTable').innerHTML='<tr><td class="empty" style="border:0;padding-left:8px">Введите результат теста — появятся темпы.</td></tr>'; return; }
+    var kinds=[['Интервалы (быстро)','I'],['Темп','T'],['Лёгкий / разминка','E'],['Восстановление','R']];
+    var html='<tr><th>Тип</th><th>Темп /км</th></tr>';
+    kinds.forEach(function(r){ html+='<tr><td>'+r[0]+'</td><td>'+fmtPace(paceFor(r[1]))+'</td></tr>'; });
+    $('paceTable').innerHTML=html;
+  }
+  function applyPaceTest(){
+    var dist=parseFloat($('ptDist').value), secs=(parseInt($('ptMin').value||0,10))*60+(parseInt($('ptSec').value||0,10));
+    PT=(dist>0 && secs>0)?{dist:dist,secs:secs}:null;
+    savePaceTest(); renderPaceTable();
+    if(!running) loadWorkout(selId);            // обновить темп в фазах
+  }
   $('zRest').value=ZN.rest; $('zMax').value=ZN.max; renderZoneTable();
   $('zRest').addEventListener('input',applyZones);
   $('zMax').addEventListener('input',applyZones);
+  if(PT){ $('ptDist').value=PT.dist; $('ptMin').value=Math.floor(PT.secs/60); $('ptSec').value=PT.secs%60; }
+  renderPaceTable();
+  ['ptDist','ptMin','ptSec'].forEach(function(id){ $(id).addEventListener('input',applyPaceTest); });
 
   // ---------- вкладки ----------
   var VIEWS={ run:'viewRun', build:'viewBuild', zones:'viewZones' };
