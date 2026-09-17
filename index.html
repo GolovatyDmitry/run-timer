@@ -135,6 +135,18 @@
   .saved .ic:hover{ background:var(--btn-hi); }
   .empty{ color:var(--ink-faint); font-size:.9rem; }
   @media (prefers-reduced-motion:reduce){ .clock.warn{animation:none;} .controls button:active{transform:none;} }
+
+  /* баннер обновления */
+  #updateBar{ position:fixed; left:0; right:0; bottom:0; z-index:50;
+    display:flex; align-items:center; gap:10px;
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));
+    background:#1e293b; border-top:1px solid var(--line); color:var(--ink);
+    box-shadow:0 -8px 24px rgba(0,0,0,.35); font-size:.95rem; }
+  #updateBar span{ flex:1; }
+  #updateBar button{ border:1px solid var(--line); background:var(--btn); color:var(--ink);
+    border-radius:10px; padding:9px 14px; font:600 .9rem var(--body); cursor:pointer; }
+  #updateBar #updateBtn{ background:rgba(255,255,255,.92); color:#111; border-color:transparent; }
+  #updateBar #updateClose{ padding:9px 11px; }
 </style>
 </head>
 <body>
@@ -479,12 +491,41 @@
   refreshPicker(); loadWorkout(selId||store[0].id); renderSaved(); newDraft();
 })();
 </script>
+<div id="updateBar" hidden>
+  <span>Доступно обновление</span>
+  <button id="updateBtn">Обновить</button>
+  <button id="updateClose" aria-label="Закрыть">✕</button>
+</div>
 <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js').catch(function () {});
+  (function () {
+    if (!('serviceWorker' in navigator)) return;
+    function showUpdate(reg) {
+      var bar = document.getElementById('updateBar'); if (!bar) return;
+      bar.hidden = false;
+      document.getElementById('updateBtn').onclick = function () {
+        bar.hidden = true;
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      };
+      document.getElementById('updateClose').onclick = function () { bar.hidden = true; };
+    }
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (refreshing) return; refreshing = true; location.reload();   // новый SW встал — перезагружаем
     });
-  }
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').then(function (reg) {
+        if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg);
+        reg.addEventListener('updatefound', function () {
+          var nw = reg.installing; if (!nw) return;
+          nw.addEventListener('statechange', function () {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) showUpdate(reg);
+          });
+        });
+        // периодически проверять обновление, пока приложение открыто
+        setInterval(function () { reg.update().catch(function () {}); }, 60 * 60 * 1000);
+      }).catch(function () {});
+    });
+  })();
 </script>
 </body>
 </html>
